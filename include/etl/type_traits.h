@@ -2295,6 +2295,35 @@ typedef integral_constant<bool, true>  true_type;
   using type_identity_t = typename type_identity<T>::type;
 #endif
 
+#if ETL_USING_BUILTIN_UNDERLYING_TYPE
+namespace private_type_traits
+{
+  template <typename T, bool = is_enum<T>::value>
+  struct __underlying_type_impl;
+
+  template <typename T>
+  struct __underlying_type_impl<T, false>
+  {
+  };
+
+  template <typename T>
+  struct __underlying_type_impl<T, true>
+  {
+    using type = __underlying_type(T);
+  };
+}
+
+template <typename T>
+struct underlying_type : private_type_traits::__underlying_type_impl<T, is_enum<T>::value>
+{
+};
+
+#if ETL_USING_CPP11
+template <typename T>
+using underlying_type_t = typename underlying_type<T>::type;
+#endif
+#endif
+
 #if ETL_USING_CPP11
   //*********************************************
   // has_duplicates
@@ -2348,6 +2377,57 @@ typedef integral_constant<bool, true>  true_type;
 #if ETL_USING_CPP17
   template <typename T, typename... TTypes>
   inline constexpr bool has_duplicates_of_v = etl::has_duplicates_of<T, TTypes...>::value;
+#endif
+
+#if ETL_USING_STL && ETL_USING_CPP17
+  template <typename... Types>
+  using is_invocable_r = std::is_invocable_r<Types...>;
+  template <typename R, typename F, typename... Args>
+  inline constexpr bool is_invocable_r_v = std::is_invocable_r_v<R, F, Args...>;
+#elif ETL_USING_CPP11
+  namespace private_type_traits
+  {
+    template <typename R>
+    void accept(R);
+
+    template <typename, typename R, typename F, typename... Args>
+    struct is_invocable_r_impl : etl::false_type
+    {
+    };
+
+    template <typename F, typename... Args>
+    struct is_invocable_r_impl<
+      decltype(etl::declval<F>()(etl::declval<Args>()...), void()),
+      void,
+      F,
+      Args...> : etl::true_type
+    {
+    };
+
+    template <typename F, typename... Args>
+    struct is_invocable_r_impl<
+      decltype(etl::declval<F>()(etl::declval<Args>()...), void()),
+      const void,
+      F,
+      Args...> : etl::true_type
+    {
+    };
+
+    template <typename R, typename F, typename... Args>
+    struct is_invocable_r_impl<
+      decltype(accept<R>(etl::declval<F>()(etl::declval<Args>()...))),
+      R,
+      F,
+      Args...> : etl::true_type
+    {
+    };
+  }  // namespace private_type_traits
+  template <typename R, typename F, typename... Args>
+  using is_invocable_r = private_type_traits::is_invocable_r_impl<void, R, F, Args...>;
+#if ETL_USING_CPP17
+  template <typename R, typename F, typename... Args>
+  inline constexpr bool is_invocable_r_v = is_invocable_r<R, F, Args...>::value;
+#endif
 #endif
 }
 

@@ -32,6 +32,10 @@ SOFTWARE.
 #define ETL_SPAN_INCLUDED
 
 #include "platform.h"
+
+#include "error_handler.h"
+#include "exception.h"
+#include "alignment.h"
 #include "iterator.h"
 #include "algorithm.h"
 #include "circular_iterator.h"
@@ -55,6 +59,48 @@ SOFTWARE.
 
 namespace etl
 {
+  //***************************************************************************
+  ///\ingroup span
+  /// Exception base for span
+  //***************************************************************************
+  class span_exception : public exception
+  {
+  public:
+
+    span_exception(string_type reason_, string_type file_name_, numeric_type line_number_)
+      : exception(reason_, file_name_, line_number_)
+    {
+    }
+  };
+
+  //***************************************************************************
+  ///\ingroup span
+  /// Bad alignment exception.
+  //***************************************************************************
+  class span_alignment_exception : public span_exception
+  {
+  public:
+
+    span_alignment_exception(string_type file_name_, numeric_type line_number_)
+      : span_exception(ETL_ERROR_TEXT("span:alignment", ETL_SPAN_FILE_ID"A"), file_name_, line_number_)
+    {
+    }
+  };
+
+  //***************************************************************************
+  ///\ingroup span
+  /// Bad size exception.
+  //***************************************************************************
+  class span_size_exception : public span_exception
+  {
+  public:
+
+    span_size_exception(string_type file_name_, numeric_type line_number_)
+      : span_exception(ETL_ERROR_TEXT("span:size", ETL_SPAN_FILE_ID"B"), file_name_, line_number_)
+    {
+    }
+  };
+
   //***************************************************************************
   /// Span - Fixed Extent
   //***************************************************************************
@@ -424,6 +470,18 @@ namespace etl
     {
       return (count == etl::dynamic_extent) ? etl::span<element_type, etl::dynamic_extent>(pbegin + offset, (pbegin + Extent))
                                             : etl::span<element_type, etl::dynamic_extent>(pbegin + offset, pbegin + offset + count);
+    }
+
+    //*************************************************************************
+    /// Reinterpret the span as a span with different element type.
+    //*************************************************************************
+    template<typename TNew>
+    ETL_NODISCARD ETL_CONSTEXPR14 etl::span<TNew, etl::dynamic_extent> reinterpret_as() const
+    {
+      ETL_ASSERT(etl::is_aligned<etl::alignment_of<TNew>::value>(pbegin), ETL_ERROR(span_alignment_exception));
+
+      return etl::span<TNew, etl::dynamic_extent>(reinterpret_cast<TNew*>(pbegin),
+        Extent * sizeof(element_type) / sizeof(TNew));
     }
 
   private:
@@ -812,6 +870,65 @@ namespace etl
                                             : etl::span<element_type, etl::dynamic_extent>(pbegin + offset, pbegin + offset + count);
     }
 
+    //*************************************************************************
+    /// Moves the pointer to the first element of the span further by a specified number of elements.
+    ///\tparam elements Number of elements to move forward
+    //*************************************************************************
+    void advance(size_t elements) ETL_NOEXCEPT
+    {
+      elements = etl::min(elements, size());
+      pbegin += elements;
+    }
+
+    //*************************************************************************
+    /// Reinterpret the span as a span with different element type.
+    //*************************************************************************
+    template<typename TNew>
+    ETL_NODISCARD ETL_CONSTEXPR14 etl::span<TNew, etl::dynamic_extent> reinterpret_as() const
+    {
+      ETL_ASSERT(etl::is_aligned<etl::alignment_of<TNew>::value>(pbegin), ETL_ERROR(span_alignment_exception));
+
+      return etl::span<TNew, etl::dynamic_extent>(reinterpret_cast<TNew*>(pbegin),
+        (pend - pbegin) * sizeof(element_type) / sizeof(TNew));
+    }
+
+    //*************************************************************************
+    /// Split off and return an initial span of specified type of this span.
+    /// The original span is advanced by the size of the returned span.
+    /// \tparam TRet Returned span type
+    /// \param n Number of elements in returned span
+    //*************************************************************************
+    template<typename TRet>
+    ETL_NODISCARD etl::span<TRet> take(size_t const n)
+    {
+      ETL_STATIC_ASSERT(sizeof(TRet) % sizeof(element_type) == 0, "sizeof(TRet) must be divisible by sizeof(T)");
+
+      ETL_ASSERT(etl::is_aligned<etl::alignment_of<TRet>::value>(pbegin), ETL_ERROR(span_alignment_exception));
+      ETL_ASSERT(sizeof(TRet) * n <= sizeof(element_type) * size(), ETL_ERROR(span_size_exception));
+
+      etl::span<TRet> result = reinterpret_as<TRet>().first(n);
+      advance(sizeof(TRet) / sizeof(element_type) * n);
+      return result;
+    }
+
+    //*************************************************************************
+    /// Split off and return an initial value of specified type of this span.
+    /// The original span is advanced by the size of TRet
+    /// \tparam TRet Returned span type
+    //*************************************************************************
+    template<typename TRet>
+    ETL_NODISCARD TRet& take()
+    {
+      ETL_STATIC_ASSERT(sizeof(TRet) % sizeof(element_type) == 0, "sizeof(TRet) must be divisible by sizeof(T)");
+
+      ETL_ASSERT(etl::is_aligned<etl::alignment_of<TRet>::value>(pbegin), ETL_ERROR(span_alignment_exception));
+      ETL_ASSERT(sizeof(TRet) <= sizeof(element_type) * size(), ETL_ERROR(span_size_exception));
+
+      TRet& result = *reinterpret_cast<TRet*>(data());
+      advance(sizeof(TRet) / sizeof(element_type));
+      return result;
+    }
+
   private:
 
     pointer pbegin;
@@ -882,6 +999,33 @@ namespace etl
     return (lhs.empty() && rhs.empty()) ||
            ((lhs.begin() == rhs.begin()) && (lhs.size() == rhs.size())) ||
            etl::equal(lhs.begin(), lhs.end(), rhs.begin(), rhs.end());
+  }
+
+  //*************************************************************************
+  /// Copy complete element data from one span to another. If the destination
+  /// span is bigger than the source span, only the initial part of
+  /// destination span is overwritten.
+  ///\param src Source
+  ///\param dst Destination
+  ///\return true, if copy was successful (including empty source span, or
+  ///        spans pointing to the same address)
+  ///\return false, if the destination span is shorter than the source span.
+  //*************************************************************************
+  template <typename T1, size_t N1, typename T2, size_t N2>
+  typename etl::enable_if<etl::is_same<typename etl::remove_cv<T1>::type, typename etl::remove_cv<T2>::type>::value &&
+                          !etl::is_const<T2>::value, bool>::type
+    copy(const etl::span<T1, N1>& src, const etl::span<T2, N2>& dst)
+  {
+    if (src.empty() || (src.begin() == dst.begin()))
+    {
+      return true;
+    }
+    if (src.size() > dst.size())
+    {
+      return false;
+    }
+    (void) etl::copy(src.begin(), src.end(), dst.begin());
+    return true;
   }
 
   //*************************************************************************

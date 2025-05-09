@@ -58,6 +58,7 @@ add_executable(etl_tests
 	test_callback_timer_locked.cpp
 	test_char_traits.cpp
 	test_checksum.cpp
+	test_chrono.cpp
 	test_circular_buffer.cpp
 	test_circular_buffer_external_buffer.cpp
 	test_circular_iterator.cpp
@@ -151,6 +152,7 @@ add_executable(etl_tests
 	test_histogram.cpp
 	test_indirect_vector.cpp
 	test_indirect_vector_external_buffer.cpp
+	test_inplace_function.cpp
 	test_instance_count.cpp
 	test_integral_limits.cpp
 	test_intrusive_forward_list.cpp
@@ -286,6 +288,7 @@ add_executable(etl_tests
 	test_to_u8string.cpp
 	test_to_wstring.cpp
 	test_type_def.cpp
+	test_type_list.cpp
 	test_type_lookup.cpp
 	test_type_select.cpp
 	test_type_traits.cpp
@@ -321,20 +324,23 @@ if (ETL_CXX_STANDARD MATCHES "98")
 	message(STATUS "Compiling for C++98")
     set_property(TARGET etl_tests PROPERTY CXX_STANDARD 98)
 elseif (ETL_CXX_STANDARD MATCHES "03")
-	message(STATUS "Compiling for C++03 (C++98)")    
+	message(STATUS "Compiling for C++03 (C++98)")
 	set_property(TARGET etl_tests PROPERTY CXX_STANDARD 98)
 elseif (ETL_CXX_STANDARD MATCHES "11")
-	message(STATUS "Compiling for C++11")    
+	message(STATUS "Compiling for C++11")
 	set_property(TARGET etl_tests PROPERTY CXX_STANDARD 11)
 elseif (ETL_CXX_STANDARD MATCHES "14")
-	message(STATUS "Compiling for C++14")    
+	message(STATUS "Compiling for C++14")
 	set_property(TARGET etl_tests PROPERTY CXX_STANDARD 14)
 elseif (ETL_CXX_STANDARD MATCHES "17")
-	message(STATUS "Compiling for C++17")    
+	message(STATUS "Compiling for C++17")
 	set_property(TARGET etl_tests PROPERTY CXX_STANDARD 17)
-else()
+elseif (ETL_CXX_STANDARD MATCHES "20")
 	message(STATUS "Compiling for C++20")
 	set_property(TARGET etl_tests PROPERTY CXX_STANDARD 20)
+else()
+	message(STATUS "Compiling for C++23")
+	set_property(TARGET etl_tests PROPERTY CXX_STANDARD 23)
 endif()
 
 if (NO_STL OR ETL_NO_STL)

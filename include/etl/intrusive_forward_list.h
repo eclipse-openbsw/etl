@@ -253,6 +253,27 @@ namespace etl
       return current_size;
     }
 
+    //*************************************************************************
+    /// Detects existence of specified node in list.
+    ///\param search_link The node to find in list
+    //*************************************************************************
+    bool contains_node(const link_type& search_link) const
+    {
+      const link_type* p_link = start.etl_next;
+
+      while (p_link != ETL_NULLPTR)
+      {
+        if (&search_link == p_link)
+        {
+          return true;
+        }
+
+        p_link = p_link->link_type::etl_next;
+      }
+
+      return false;
+    }
+
   protected:
 
     link_type start;             ///< The link pointer that acts as the intrusive_forward_list start.
@@ -351,11 +372,7 @@ namespace etl
         }
 
         p_previous = p_link;
-
-        if (p_link != ETL_NULLPTR)
-        {
-          p_link = p_link->link_type::etl_next;
-        }
+        p_link = p_link->link_type::etl_next;
       }
 
       return ETL_NULLPTR;
@@ -992,29 +1009,6 @@ namespace etl
     }
 
     //*************************************************************************
-    // Removes the element specified by pointer.
-    //*************************************************************************
-    void remove(const_pointer element)
-    {
-      iterator i_item = begin();
-      iterator i_last_item = before_begin();
-
-      while (i_item != end())
-      {
-        if (&i_item == element)
-        {
-          i_item = erase_after(i_last_item);
-          return;
-        }
-        else
-        {
-          ++i_item;
-          ++i_last_item;
-        }
-      }
-    }
-
-    //*************************************************************************
     /// Removes according to a predicate.
     //*************************************************************************
     template <typename TPredicate>
@@ -1188,6 +1182,27 @@ namespace etl
 
         other.initialise();
       }
+    }
+
+    //*************************************************************************
+    /// Detects existence of specified value in list.
+    ///\param value The value to find in list
+    //*************************************************************************
+    bool contains(const_reference value) const
+    {
+      const_iterator i_item = begin();
+
+      while (i_item != end())
+      {
+        if (*i_item == value)
+        {
+          return true;
+        }
+
+        ++i_item;
+      }
+
+      return false;
     }
 
   private:
